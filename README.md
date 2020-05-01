@@ -4,7 +4,7 @@ Handles the process of creating a param.sfo file, compressing of image files usi
 
 ## Install
 ### Step 1
-First, download the latest lpp-vita relaese from [here](https://github.com/Rinnegatamante/lpp-vita/releases/latest) and locate the "eboot_safe.bin" and "eboot_unsafe.bin" files.
+First, download the latest lpp-vita release from [here](https://github.com/Rinnegatamante/lpp-vita/releases/latest) and locate the "eboot_safe.bin" and "eboot_unsafe.bin" files.
 
 ### Step 2
 Install node from [here](https://nodejs.org/) if you don't have it.
