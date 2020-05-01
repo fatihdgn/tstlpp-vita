@@ -19,6 +19,7 @@ function initializeProject(done) {
     if (project.sourceDir === undefined) project.sourceDir = "out-src";
     if (project.tempDir === undefined) project.tempDir = ".temp";
     if (project.outDir === undefined) project.outDir = "dist";
+    if (project.files === undefined) project.files = [];
     done();
 }
 
@@ -42,7 +43,7 @@ function clearDist(done) {
 
 function copyFiles() {
     let sourceFilesCopy = src(`${project.sourceDir}/**/*`).pipe(dest(project.tempDir));
-    let systemFilesCopy = src([
+    let filesCopy = src([
         `${project.systemDir}/**/*`,
         `!${project.systemDir}/eboot_safe.bin`,
         `!${project.systemDir}/eboot_unsafe.bin`,
@@ -51,7 +52,7 @@ function copyFiles() {
     let ebootCopy = src(project.unsafe ? `${project.systemDir}/eboot_unsafe.bin` : `${project.systemDir}/eboot_safe.bin`)
         .pipe(rename("eboot.bin"))
         .pipe(dest(project.tempDir));
-    return merge(sourceFilesCopy, systemFilesCopy, ebootCopy);
+    return merge(sourceFilesCopy, filesCopy, ebootCopy);
 }
 
 function compressImageFiles() {
