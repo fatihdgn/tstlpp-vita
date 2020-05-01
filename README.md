@@ -8,7 +8,7 @@ First, download the latest lpp-vita release from [here](https://github.com/Rinne
 
 ### Step 2
 Install node from [here](https://nodejs.org/) if you don't have it.
-### Step 4
+### Step 3
 Install [gulp](https://gulpjs.com/) cli globally. It's used for the build process.
 ```
 npm install -g gulp/cli 
