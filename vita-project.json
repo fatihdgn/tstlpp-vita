@@ -1,0 +1,12 @@
+{
+    "id": "HELLOWRLD",
+    "title": "Hello World",
+    "unsafe": true,
+    "systemDir": "system",
+    "sourceDir": "out-src",
+    "tempDir": ".temp",
+    "outDir": "dist",
+    "files": [
+        "assets/**/*"
+    ]
+}

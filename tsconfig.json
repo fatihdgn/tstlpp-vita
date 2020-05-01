@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": [
+      "esnext"
+    ],
+    "types": [
+      "lpp-vita-definitions"
+    ],
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "strict": true,
+    "rootDir": "src",
+    "outDir": "out-src"
+  },
+  "tstl": {
+    "luaTarget": "5.2",
+    "noHeader": true,
+    "luaBundleEntry": "src/index.ts",
+    "luaBundle": "out-src/index.lua",
+  }
+}
