@@ -52,10 +52,11 @@ There is also a XXXXYYYYY pattern you can use where XXXX part can be author or a
 Your choice.
 #### Title (title)
 This is the name of your homebrew.
-#### Unsafe (unsafe)
+#### Unsafe (unsafe) | Optional
 Defines the eboot file to be used. 
 If it's true, "eboot_unsafe.bin" will be used. 
 If it's false, "eboot_safe.bin" will be used.
+Default value is "false".
 #### System Directory (systemDir) | Optional
 Defines the directory where Vita application system files are located. Default value is "system".
 #### Source Directory (sourceDir) | Optional
