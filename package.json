@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "tstlpp-vita",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "scripts": {
     "build": "tstl & gulp",
@@ -15,10 +15,11 @@
     "gulp": "^4.0.2",
     "gulp-pngquant": "^1.0.13",
     "gulp-rename": "^2.0.0",
+    "lua-types": "^2.8.0",
     "merge-stream": "^2.0.0",
     "typescript-to-lua": "^0.32.2"
   },
   "dependencies": {
-    "lpp-vita-definitions": "^0.1.0"
+    "lpp-vita-definitions": "^0.1.1"
   }
 }
