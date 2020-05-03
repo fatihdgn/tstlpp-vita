@@ -77,7 +77,7 @@ For example, you can define a single file like below;
 	...
 }
 ```
-Or you can define a globbing pattern. The example below will copy all of the files within the "assets" folder.
+Or you can define a globbing pattern. The example below will copy all of the files and folders within the "assets" folder.
 ```
 {
 	...
@@ -87,4 +87,14 @@ Or you can define a globbing pattern. The example below will copy all of the fil
 	...
 }
 ```
-
+This approach doesn't copy the "assets" folder itself, just the contents of it. If you want to keep the folder itself too, you can put a "*" before the folder like below.
+```
+{
+	...
+	files:[
+		"*assets/**/*"
+	],
+	...
+}
+```
+This way, the package will contain the "assets" folder too.
