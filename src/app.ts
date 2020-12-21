@@ -1,5 +1,5 @@
-export default class Program {
-    main(): void {
+export default class App {
+    run(): void {
         let white = Color.new(255, 255, 255);
 
         while (true) {
