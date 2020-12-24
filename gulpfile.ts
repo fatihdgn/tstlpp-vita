@@ -1,5 +1,5 @@
 import os from "os";
-import gulp, { series } from "gulp";
+import gulp from "gulp";
 import fs from "fs";
 import del from "del";
 import { execSync } from "child_process";
@@ -127,7 +127,7 @@ class VitaProject {
     this.logger("Compile completed.");
   }
 
-  generateSfoFile(path: string){
+  generateSfoFile(path: string) {
     this.logger(`Generating sfo file to path: ${path}`);
     execSync(
       `vita-mksfoex -s TITLE_ID=${this.configuration.id} "${this.configuration.title}" ${path}`
@@ -174,8 +174,8 @@ class VitaProject {
 
   ebootFile(unsafe?: boolean) {
     if (unsafe == null)
-    unsafe = this.configuration.unsafe ?? defaults.config.unsafe ?? false;
-    this.logger(`Bundling ${unsafe ? 'unsafe' : 'safe'} eboot file...`);
+      unsafe = this.configuration.unsafe ?? defaults.config.unsafe ?? false;
+    this.logger(`Bundling ${unsafe ? "unsafe" : "safe"} eboot file...`);
     return src(
       unsafe
         ? `${this.configuration.systemDir}/${defaults.ebootFileNames.unsafe}`
@@ -193,17 +193,21 @@ class VitaProject {
     );
   }
 
-  build(){
+  build() {
     this.compileSourceFiles();
     return this.projectFiles()
-    .pipe(zip(`${this.configuration.title}.vpk`))
-    .pipe(
-      gulp.dest(this.configuration.outDir ?? defaults.config.outDir ?? "dist")
-    );
+      .pipe(zip(`${this.configuration.title}.vpk`))
+      .pipe(
+        gulp.dest(this.configuration.outDir ?? defaults.config.outDir ?? "dist")
+      );
   }
 }
 
-let project = new VitaProject();
-gulp.task("default", async () => { project.build(); });
-gulp.task("build", async() => { project.build(); });
-
+gulp.task("default", async () => {
+  let project = new VitaProject();
+  project.build();
+});
+gulp.task("build", async () => {
+  let project = new VitaProject();
+  project.build();
+});

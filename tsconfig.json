@@ -4,13 +4,8 @@
     "esModuleInterop": true,
     "target": "esnext",
     "moduleResolution": "node",
-    "lib": [
-      "esnext"
-    ],
-    "types": [
-      "lua-types/5.2",
-      "lpp-vita-definitions"
-    ],
+    "lib": ["esnext"],
+    "types": ["lua-types/5.2", "lpp-vita-definitions"],
     "noImplicitAny": true,
     "noImplicitThis": true,
     "strict": true,
@@ -21,10 +16,7 @@
     "luaTarget": "5.2",
     "noHeader": true,
     "luaBundleEntry": "src/index.ts",
-    "luaBundle": "out-src/index.lua",
+    "luaBundle": "out-src/index.lua"
   },
-  "exclude": [
-    "node_modules",
-    "gulpfile.ts"
-  ]
+  "exclude": ["node_modules", "gulpfile.ts", "vita-project.ts"]
 }
