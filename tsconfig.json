@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "target": "esnext",
     "moduleResolution": "node",
     "lib": [
@@ -20,5 +22,9 @@
     "noHeader": true,
     "luaBundleEntry": "src/index.ts",
     "luaBundle": "out-src/index.lua",
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "gulpfile.ts"
+  ]
 }
