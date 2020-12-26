@@ -16,6 +16,7 @@
     "@types/gulp-rename": "^2.0.0",
     "@types/gulp-zip": "^4.0.1",
     "@types/merge-stream": "^1.1.2",
+    "basic-ftp": "^4.6.3",
     "del": "^5.1.0",
     "gulp": "^4.0.2",
     "gulp-filter": "^6.0.0",

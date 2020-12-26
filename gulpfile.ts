@@ -8,6 +8,7 @@ import merge from "merge-stream";
 import { src } from "gulp";
 import rename from "gulp-rename";
 import filter from "gulp-filter";
+import { Client } from "basic-ftp";
 const pngquant = require("gulp-pngquant");
 const intermediate = require("gulp-intermediate");
 const NetcatClient = require("netcat/client");
@@ -68,7 +69,7 @@ async function sleepAsync(ms: number) {
 class VitaProject {
   constructor(
     configurationFilePath?: string,
-    public logger: (message: string) => void = console.log // Verbose?
+    public logger: (message: any) => void = console.log // Verbose?
   ) {
     this.configuration = this.readConfiguration(
       configurationFilePath ?? defaults.projectConfigurationFilePath
@@ -115,7 +116,7 @@ class VitaProject {
   }
 
   generateNetcatClient(): typeof NetcatClient {
-    if (this.configuration.ip === undefined) throw errors.ipIsNotDefined;
+    if (this.configuration.ip == null) throw errors.ipIsNotDefined;
     return new NetcatClient()
       .addr(this.configuration.ip)
       .port(this.configuration.ports?.cmd ?? defaults.config.ports?.cmd ?? 1338)
@@ -138,6 +139,32 @@ class VitaProject {
           });
         });
     });
+  }
+
+  async connectAndSendFileFromFtpAsync() {
+    if (this.configuration.ip == null) throw errors.ipIsNotDefined;
+    if (this.configuration.id == null) throw "Id is not correct.";
+    let ftp = new Client();
+    this.logger("Connecting to FTP server...");
+    await ftp.access({
+      host: this.configuration.ip,
+      port: this.configuration.ports?.ftp ?? defaults.config.ports?.ftp ?? 1337,
+    });
+    this.logger("Connected to FTP server.");
+    this.logger("Listing directories");
+    this.logger(await ftp.list());
+    this.logger("Going to ux0: directory");
+    await ftp.cd("ux0:");
+    this.logger("Going to app directory");
+    await ftp.cd("app");
+    this.logger(`Going to ${this.configuration.id} directory`);
+    await ftp.cd(this.configuration.id);
+    this.logger("Uploading file...");
+    await ftp.uploadFrom("./assets/100x100.png", "100x100.png");
+    this.logger("File uploaded.");
+    this.logger("Closing connection.");
+    ftp.close();
+    this.logger("Connection closed");
   }
 
   async clearTempDirectoryAsync() {
@@ -257,4 +284,9 @@ gulp.task("test:cmd", async () => {
   project.logger("Destroying applications...");
   await project.sendCmdAsync("destroy");
   project.logger("Applications destroyed.");
+});
+
+gulp.task("test:ftp", async () => {
+  let project = new VitaProject();
+  await project.connectAndSendFileFromFtpAsync();
 });
