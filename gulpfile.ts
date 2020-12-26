@@ -10,11 +10,14 @@ import rename from "gulp-rename";
 import filter from "gulp-filter";
 const pngquant = require("gulp-pngquant");
 const intermediate = require("gulp-intermediate");
+const NetcatClient = require("netcat/client");
 
 interface IVitaProjectConfiguration {
   id: string | null;
   title: string | null;
   unsafe: boolean | null;
+  ip?: string | null;
+  ports?: { ftp?: number | null; cmd?: number | null } | null;
   systemDir?: string | null;
   sourceDir?: string | null;
   tempDir?: string | null;
@@ -32,6 +35,10 @@ const defaults = {
   config: <IVitaProjectConfiguration>{
     id: "HELLOWRLD",
     title: "Hello World",
+    ports: {
+      ftp: 1337,
+      cmd: 1338,
+    },
     unsafe: false,
     systemDir: "system",
     sourceDir: "out-src",
@@ -50,6 +57,8 @@ const errors = {
     "Safe eboot file is missing. Make sure you have the eboot_safe.bin and eboot_unsafe.bin files at the system directory. Download them from 'https://github.com/Rinnegatamante/lpp-vita/releases/latest' if you don't have these files...",
   unsafeEbootFileIsMissing:
     "Unsafe eboot file is missing. Make sure you have the eboot_safe.bin and eboot_unsafe.bin files at the system directory. Download them from 'https://github.com/Rinnegatamante/lpp-vita/releases/latest' if you don't have these files...",
+  ipIsNotDefined:
+    "'ip' is not defined inside project file and not sent from connect call.",
 };
 
 async function sleepAsync(ms: number) {
@@ -103,6 +112,32 @@ class VitaProject {
     )
       throw errors.unsafeEbootFileIsMissing;
     this.logger("Eboot files are okay.");
+  }
+
+  generateNetcatClient(): typeof NetcatClient {
+    if (this.configuration.ip === undefined) throw errors.ipIsNotDefined;
+    return new NetcatClient()
+      .addr(this.configuration.ip)
+      .port(this.configuration.ports?.cmd ?? defaults.config.ports?.cmd ?? 1338)
+      .retry(5000);
+  }
+
+  sendCmdAsync(cmd: string) {
+    return new Promise<void>((resolve, reject) => {
+      let nc: typeof NetcatClient;
+      try {
+        nc = this.generateNetcatClient();
+      } catch (error) {
+        reject(error);
+      }
+      nc.on("error", reject)
+        .connect()
+        .send(cmd + "\n", () => {
+          nc.close(() => {
+            resolve();
+          });
+        });
+    });
   }
 
   async clearTempDirectoryAsync() {
@@ -210,4 +245,16 @@ gulp.task("default", async () => {
 gulp.task("build", async () => {
   let project = new VitaProject();
   project.build();
+});
+
+gulp.task("test:cmd", async () => {
+  let project = new VitaProject();
+  project.logger("Launching application...");
+  await project.sendCmdAsync("launch AURA00001");
+  project.logger("Application launched.");
+  project.logger("Waiting two seconds.");
+  await sleepAsync(2000);
+  project.logger("Destroying applications...");
+  await project.sendCmdAsync("destroy");
+  project.logger("Applications destroyed.");
 });
