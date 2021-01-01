@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "unsafe": {
+      "type": "boolean"
+    },
+    "ip": {
+      "type": "string"
+    },
+    "ports": {
+      "type": "object",
+      "properties": {
+        "ftp": {
+          "type": "integer"
+        },
+        "cmd": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ftp",
+        "cmd"
+      ]
+    },
+    "systemDir": {
+      "type": "string"
+    },
+    "sourceDir": {
+      "type": "string"
+    },
+    "tempDir": {
+      "type": "string"
+    },
+    "outDir": {
+      "type": "string"
+    },
+    "files": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "unsafe",
+    "ip",
+    "ports",
+    "systemDir",
+    "sourceDir",
+    "tempDir",
+    "outDir",
+    "files"
+  ]
+}

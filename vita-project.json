@@ -1,7 +1,8 @@
 {
+  "$schema": "./vita-project.schema.json",
   "id": "HELLOWRLD",
   "title": "Hello World",
-  "ip": "192.168.1.63",
+  "ip": "192.168.1.40",
   "ports": {
     "ftp": 1337,
     "cmd": 1338

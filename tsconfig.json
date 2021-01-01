@@ -18,5 +18,5 @@
     "luaBundleEntry": "src/index.ts",
     "luaBundle": "out-src/index.lua"
   },
-  "exclude": ["node_modules", "gulpfile.ts", "vita-project.ts"]
+  "exclude": ["node_modules", "gulpfile.ts"]
 }

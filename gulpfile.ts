@@ -10,20 +10,19 @@ import rename from "gulp-rename";
 import filter from "gulp-filter";
 import { Client } from "basic-ftp";
 const pngquant = require("gulp-pngquant");
-const intermediate = require("gulp-intermediate");
 const NetcatClient = require("netcat/client");
 
 interface IVitaProjectConfiguration {
-  id: string | null;
-  title: string | null;
-  unsafe: boolean | null;
-  ip?: string | null;
-  ports?: { ftp?: number | null; cmd?: number | null } | null;
-  systemDir?: string | null;
-  sourceDir?: string | null;
-  tempDir?: string | null;
-  outDir?: string | null;
-  files?: Array<string> | null;
+  id: string;
+  title: string;
+  unsafe: boolean;
+  ip?: string;
+  ports: { ftp: number; cmd: number };
+  systemDir: string;
+  sourceDir: string;
+  tempDir: string;
+  outDir: string;
+  files: Array<string>;
 }
 
 const defaults = {
@@ -34,15 +33,16 @@ const defaults = {
     unsafe: "eboot_unsafe.bin",
   },
   config: <IVitaProjectConfiguration>{
-    id: "HELLOWRLD",
-    title: "Hello World",
+    id: null,
+    title: null,
+    unsafe: false,
     ports: {
       ftp: 1337,
       cmd: 1338,
     },
-    unsafe: false,
     systemDir: "system",
     sourceDir: "out-src",
+    tempDir: ".temp",
     outDir: "dist",
     files: ["*assets/**/*"],
   },
@@ -62,8 +62,18 @@ const errors = {
     "'ip' is not defined inside project file and not sent from connect call.",
 };
 
+// TODO: Find a way to get these Vita Project codes out from the gulpfile.ts
+
+// TODO: Implement a resource file structure to get
+
 async function sleepAsync(ms: number) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
+}
+
+function toPromise(stream: NodeJS.ReadWriteStream) {
+  return new Promise((resolve, reject) => {
+    stream.on("error", reject).on("end", resolve);
+  });
 }
 
 class VitaProject {
@@ -82,10 +92,10 @@ class VitaProject {
   private readConfiguration(filePath: string): IVitaProjectConfiguration {
     this.logger("Reading configuration...");
     if (!fs.existsSync(filePath)) throw errors.projectConfigFileIsMissing;
-    let vitaProjectConfig: IVitaProjectConfiguration = JSON.parse(
-      fs.readFileSync(filePath, "utf-8")
+    let vitaProjectConfig = Object.assign(
+      defaults.config,
+      JSON.parse(fs.readFileSync(filePath, "utf-8"))
     );
-    vitaProjectConfig = Object.assign(defaults.config, vitaProjectConfig);
     this.logger("Configuration readed successfully.");
     return vitaProjectConfig;
   }
@@ -94,7 +104,9 @@ class VitaProject {
     this.logger("Validating configuration...");
     if (configuration.id == null || configuration.id.length !== 9)
       throw errors.idDoesNotConformRequirements;
-    if (configuration?.title == null) throw errors.titleIsNotAvailable;
+    if (configuration.title == null) throw errors.titleIsNotAvailable;
+
+    if(configuration.unsafe == null) throw "Configuration has an error.";
     this.logger("Configuration has no errors.");
   }
 
@@ -160,6 +172,7 @@ class VitaProject {
     this.logger(`Going to ${this.configuration.id} directory`);
     await ftp.cd(this.configuration.id);
     this.logger("Uploading file...");
+
     await ftp.uploadFrom("./assets/100x100.png", "100x100.png");
     this.logger("File uploaded.");
     this.logger("Closing connection.");
@@ -263,6 +276,41 @@ class VitaProject {
         gulp.dest(this.configuration.outDir ?? defaults.config.outDir ?? "dist")
       );
   }
+
+  async deployAsync() {
+    this.compileSourceFiles();
+    let tempDir =
+      this.configuration.tempDir ?? defaults.config.tempDir ?? ".temp";
+    this.logger("Bundling project files to temp directory.");
+    await toPromise(this.projectFiles().pipe(gulp.dest(tempDir)));
+    this.logger("Files bundled.");
+    this.logger("Closing applications just in case.");
+    await this.sendCmdAsync("destroy");
+    let ftp = new Client();
+    this.logger("Connecting to FTP server...");
+    await ftp.access({
+      host: this.configuration.ip ?? "localhost",
+      port: this.configuration.ports?.ftp ?? defaults.config.ports?.ftp ?? 1337,
+    });
+    this.logger("Connected to FTP server.");
+    this.logger("Listing directories");
+    this.logger(await ftp.list());
+    this.logger("Going to ux0: directory");
+    await ftp.cd("ux0:");
+    this.logger("Going to app directory");
+    await ftp.cd("app");
+    this.logger(`Going to ${this.configuration.id} directory`);
+    await ftp.cd(this.configuration.id ?? defaults.config.id ?? "HELLOWRLD");
+    this.logger("Uploading files...");
+    await ftp.uploadFromDir(tempDir);
+    this.logger("Files uploaded.");
+    this.logger("Closing connection.");
+    ftp.close();
+    this.logger("Connection closed");
+    this.logger("Clearing temp directory");
+    await this.clearTempDirectoryAsync();
+    this.logger("Cleared temp directory.");
+  }
 }
 
 gulp.task("default", async () => {
@@ -277,7 +325,7 @@ gulp.task("build", async () => {
 gulp.task("test:cmd", async () => {
   let project = new VitaProject();
   project.logger("Launching application...");
-  await project.sendCmdAsync("launch AURA00001");
+  await project.sendCmdAsync(`launch ${project.configuration.id}`);
   project.logger("Application launched.");
   project.logger("Waiting two seconds.");
   await sleepAsync(2000);
@@ -286,7 +334,25 @@ gulp.task("test:cmd", async () => {
   project.logger("Applications destroyed.");
 });
 
-gulp.task("test:ftp", async () => {
+gulp.task("deploy", async () => {
   let project = new VitaProject();
-  await project.connectAndSendFileFromFtpAsync();
+  await project.deployAsync();
+});
+
+gulp.task("watch", async () => {
+  /* TODO: Implement watch logic.
+    Connect to device.
+    Send the open application command. 
+    Watch for the file changes inside project files.
+      If it's a source file change, compile it or if it's a configuration file related change and if it's an image file, then process it.
+      Close the application if it's opened.
+      Connect to device through an FTP connection.
+      Send these processed files to application directory via FTP.
+      Close the FTP connection.
+      Open the app again.
+    Keep doing this until the process stops.
+  */
+  // I will be looking into this some time later because file watch partially works on WSL.
+  // https://github.com/microsoft/WSL/issues/216
+  let project = new VitaProject();
 });
