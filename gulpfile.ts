@@ -15,7 +15,7 @@ const NetcatClient = require("netcat/client");
 interface IVitaProjectConfiguration {
   id: string;
   title: string;
-  unsafe: boolean;
+  type: 'safe' | 'unsafe' | 'unsafe_sys',
   ip?: string;
   ports: { ftp: number; cmd: number };
   systemDir: string;
@@ -31,11 +31,12 @@ const defaults = {
     original: "eboot.bin",
     safe: "eboot_safe.bin",
     unsafe: "eboot_unsafe.bin",
+    unsafe_sys: "eboot_unsafe_sys.bin"
   },
   config: <IVitaProjectConfiguration>{
-    id: null,
-    title: null,
-    unsafe: false,
+    id: "",
+    title: "",
+    type: 'safe',
     ports: {
       ftp: 1337,
       cmd: 1338,
@@ -48,23 +49,19 @@ const defaults = {
   },
 };
 
-const errors = {
-  projectConfigFileIsMissing:
-    "vita-project.json file is missing. It's required for the build process.",
-  idDoesNotConformRequirements:
-    "'id' is not defined or does not conform the requirements. It must be exactly 9 characters long.",
-  titleIsNotAvailable: "'title' is not available.",
-  safeEbootFileIsMissing:
-    "Safe eboot file is missing. Make sure you have the eboot_safe.bin and eboot_unsafe.bin files at the system directory. Download them from 'https://github.com/Rinnegatamante/lpp-vita/releases/latest' if you don't have these files...",
-  unsafeEbootFileIsMissing:
-    "Unsafe eboot file is missing. Make sure you have the eboot_safe.bin and eboot_unsafe.bin files at the system directory. Download them from 'https://github.com/Rinnegatamante/lpp-vita/releases/latest' if you don't have these files...",
-  ipIsNotDefined:
-    "'ip' is not defined inside project file and not sent from connect call.",
+const consts = {
+  idLength: 9
 };
 
-// TODO: Find a way to get these Vita Project codes out from the gulpfile.ts
-
-// TODO: Implement a resource file structure to get
+const errors = {
+  projectConfigFileIsMissing: "vita-project.json file is missing. It's required for the build process.",
+  idDoesNotConformRequirements: "'id' is not defined or does not conform the requirements. It must be exactly 9 characters long.",
+  titleIsNotAvailable: "'title' is not available.",
+  typeIsNotValid: 'Type is not valid. It must be either \'safe\',\'unsafe\' or \'unsafe_sys\'.',
+  ebootFileIsMissing: "eboot file is missing. Make sure you have the eboot_safe.bin, eboot_unsafe.bin and eboot_unsafe_sys.bin files at the system directory. You can get them from 'https://github.com/Rinnegatamante/lpp-vita/releases/latest'.",
+  vitaMksfoexDoesntExists: "vita-mksfoex doesn't exists. Make sure that you installed Vita SDK or have the vita-mksfoex in your system environment. You can get the SDK from 'https://vitasdk.org/'.",
+  ipIsNotDefined: "'ip' is not defined inside project file and not sent from connect call."
+};
 
 async function sleepAsync(ms: number) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
@@ -81,6 +78,7 @@ class VitaProject {
     configurationFilePath?: string,
     public logger: (message: any) => void = console.log // Verbose?
   ) {
+    this.ensureVitaMksfoexExists();
     this.configuration = this.readConfiguration(
       configurationFilePath ?? defaults.projectConfigurationFilePath
     );
@@ -100,46 +98,64 @@ class VitaProject {
     return vitaProjectConfig;
   }
 
-  private validateConfiguration(configuration: IVitaProjectConfiguration) {
+  private validateConfiguration(config: IVitaProjectConfiguration, ensureEbootFileExists: boolean = true) {
     this.logger("Validating configuration...");
-    if (configuration.id == null || configuration.id.length !== 9)
-      throw errors.idDoesNotConformRequirements;
-    if (configuration.title == null) throw errors.titleIsNotAvailable;
-
-    if(configuration.unsafe == null) throw "Configuration has an error.";
+    this.validateId(config.id);
+    this.validateTitle(config.title);
+    this.validateType(config.type);
+    if (ensureEbootFileExists) this.ensureEbootFileExists(config);
     this.logger("Configuration has no errors.");
   }
-
-  async checkEbootFilesAsync() {
-    this.logger("Checking eboot files.");
-    if (
-      !fs.existsSync(
-        `${this.configuration.systemDir}/${defaults.ebootFileNames.safe}`
-      )
-    )
-      throw errors.safeEbootFileIsMissing;
-    if (
-      !fs.existsSync(
-        `${this.configuration.systemDir}/${defaults.ebootFileNames.unsafe}`
-      )
-    )
-      throw errors.unsafeEbootFileIsMissing;
-    this.logger("Eboot files are okay.");
+  private validateId(id: string) {
+    if (id.length !== consts.idLength)
+      throw errors.idDoesNotConformRequirements;
   }
 
-  generateNetcatClient(): typeof NetcatClient {
-    if (this.configuration.ip == null) throw errors.ipIsNotDefined;
+  private validateTitle(title: string) {
+    if (title.length === 0)
+      throw errors.titleIsNotAvailable;
+  }
+
+  private validateType(type: string) {
+    if (type !== 'safe' && type !== 'unsafe' && type !== 'unsafe_sys')
+      throw errors.typeIsNotValid
+  }
+
+  private validateIp(ip?: string) {
+    if (!!ip)
+      throw errors.ipIsNotDefined;
+  }
+
+
+  private ensureVitaMksfoexExists() {
+    const tempSfoPath = `${os.tmpdir()}/temp.sfo`
+    try { execSync(`vita-mksfoex -s TITLE_ID=HELLOWRLD "HELLO" ${tempSfoPath}`); }
+    catch { throw errors.vitaMksfoexDoesntExists; }
+    finally { del(tempSfoPath, { force: true }); }
+  }
+
+  private ensureEbootFileExists(config: IVitaProjectConfiguration) {
+    if (
+      !fs.existsSync(
+        `${config.systemDir}/eboot_${config.type}.bin`
+      )
+    )
+      throw errors.ebootFileIsMissing;
+  }
+
+  generateNetcatClient(config: IVitaProjectConfiguration): typeof NetcatClient {
+    if (config.ip == null) throw errors.ipIsNotDefined;
     return new NetcatClient()
-      .addr(this.configuration.ip)
-      .port(this.configuration.ports?.cmd ?? defaults.config.ports?.cmd ?? 1338)
+      .addr(config.ip)
+      .port(config.ports?.cmd ?? defaults.config.ports?.cmd ?? 1338)
       .retry(5000);
   }
 
-  sendCmdAsync(cmd: string) {
+  sendCmdAsync(config: IVitaProjectConfiguration, cmd: string) {
     return new Promise<void>((resolve, reject) => {
       let nc: typeof NetcatClient;
       try {
-        nc = this.generateNetcatClient();
+        nc = this.generateNetcatClient(config);
       } catch (error) {
         reject(error);
       }
@@ -153,14 +169,15 @@ class VitaProject {
     });
   }
 
-  async connectAndSendFileFromFtpAsync() {
-    if (this.configuration.ip == null) throw errors.ipIsNotDefined;
-    if (this.configuration.id == null) throw "Id is not correct.";
+  async connectAndSendFileFromFtpAsync(config: IVitaProjectConfiguration) {
+    if (config.ip == null) throw errors.ipIsNotDefined;
+    if (config.id.length !== consts.idLength)
+      throw errors.idDoesNotConformRequirements;
     let ftp = new Client();
     this.logger("Connecting to FTP server...");
     await ftp.access({
-      host: this.configuration.ip,
-      port: this.configuration.ports?.ftp ?? defaults.config.ports?.ftp ?? 1337,
+      host: config.ip,
+      port: config.ports?.ftp ?? defaults.config.ports?.ftp ?? 1337,
     });
     this.logger("Connected to FTP server.");
     this.logger("Listing directories");
@@ -169,8 +186,8 @@ class VitaProject {
     await ftp.cd("ux0:");
     this.logger("Going to app directory");
     await ftp.cd("app");
-    this.logger(`Going to ${this.configuration.id} directory`);
-    await ftp.cd(this.configuration.id);
+    this.logger(`Going to ${config.id} directory`);
+    await ftp.cd(config.id);
     this.logger("Uploading file...");
 
     await ftp.uploadFrom("./assets/100x100.png", "100x100.png");
@@ -180,20 +197,30 @@ class VitaProject {
     this.logger("Connection closed");
   }
 
-  async clearTempDirectoryAsync() {
+  async clearTempDirectoryAsync(config: IVitaProjectConfiguration) {
     this.logger("Clearing temp directory...");
-    if (this.configuration.tempDir) {
-      await del(this.configuration.tempDir);
+    if (config.tempDir) {
+      await del(config.tempDir);
       this.logger("Temp directory cleared.");
     } else throw "FATAL ERROR: Temp directory is not defined...";
   }
 
-  async clearOutDirectoryAsync() {
+  async clearDirectoryAsync(dir: string): Promise<boolean> {
+    if (!!dir) {
+      await del(`${dir}/**/*`);
+      return true;
+    }
+    return false;
+  }
+
+  async clearOutDirectoryAsync(config: IVitaProjectConfiguration) {
     this.logger("Clearing out directory...");
-    if (this.configuration.outDir) {
-      await del(`${this.configuration.outDir}/**/*`);
-      this.logger("Out directory cleared.");
-    } else throw "FATAL ERROR: Out directory is not defined...";
+
+    if (!this.clearDirectoryAsync(config.outDir)) {
+      throw "FATAL ERROR: Out directory is not defined...";
+    }
+
+    this.logger("Out directory cleared.");
   }
 
   compileSourceFiles() {
@@ -202,95 +229,89 @@ class VitaProject {
     this.logger("Compile completed.");
   }
 
-  generateSfoFile(path: string) {
+  generateSfoFile(config: IVitaProjectConfiguration, path: string) {
     this.logger(`Generating sfo file to path: ${path}`);
     execSync(
-      `vita-mksfoex -s TITLE_ID=${this.configuration.id} "${this.configuration.title}" ${path}`
+      `vita-mksfoex -s TITLE_ID=${config.id} "${config.title}" ${path}`
     );
     this.logger("Sfo file generated.");
   }
-  generatedSfoFile() {
+  generatedSfoFile(config: IVitaProjectConfiguration) {
     let sfoFilePath = `${os.tmpdir()}/param.sfo`;
-    this.generateSfoFile(sfoFilePath);
+    this.generateSfoFile(config, sfoFilePath);
     return gulp.src(sfoFilePath).pipe(rename("sce_sys/param.sfo"));
   }
 
-  sourceFiles() {
+  sourceFiles(config: IVitaProjectConfiguration) {
     this.logger("Bundling source files...");
     return src(
-      `${
-        this.configuration.sourceDir ?? defaults.config.sourceDir ?? "out-src"
-      }/**/*`
+      `${config.sourceDir}/**/*`
     );
   }
 
-  additionalFiles() {
+  additionalFiles(config: IVitaProjectConfiguration) {
     this.logger("Bundling additional files.");
-    return src(this.configuration.files ?? []);
+    return src(config.files);
   }
 
-  systemFiles() {
+  systemFiles(config: IVitaProjectConfiguration) {
     this.logger("Bundling system files.");
     return src([
-      `${this.configuration.systemDir}/**/*`,
-      `!${this.configuration.systemDir}/${defaults.ebootFileNames.safe}`,
-      `!${this.configuration.systemDir}/${defaults.ebootFileNames.unsafe}`,
+      `${config.systemDir}/**/*`,
+      `!${config.systemDir}/${defaults.ebootFileNames.safe}`,
+      `!${config.systemDir}/${defaults.ebootFileNames.unsafe}`,
+      `!${config.systemDir}/${defaults.ebootFileNames.unsafe_sys}`,
     ]);
   }
 
-  processedFiles() {
+  processedFiles(config: IVitaProjectConfiguration) {
     this.logger("Processing system and additional files.");
     let f = filter(["**/*.{bmp,png,jpg}"], { restore: true });
-    return merge(this.systemFiles(), this.additionalFiles())
+    return merge(this.systemFiles(config), this.additionalFiles(config))
       .pipe(f)
       .pipe(pngquant())
       .pipe(f.restore);
   }
 
-  ebootFile(unsafe?: boolean) {
-    if (unsafe == null)
-      unsafe = this.configuration.unsafe ?? defaults.config.unsafe ?? false;
-    this.logger(`Bundling ${unsafe ? "unsafe" : "safe"} eboot file...`);
-    return src(
-      unsafe
-        ? `${this.configuration.systemDir}/${defaults.ebootFileNames.unsafe}`
-        : `${this.configuration.systemDir}/${defaults.ebootFileNames.safe}`
-    ).pipe(rename(defaults.ebootFileNames.original));
+  ebootFile(config: IVitaProjectConfiguration) {
+    this.logger(`Bundling ${config.type} eboot file...`);
+    return src(`${config.systemDir}/eboot_${config.type}.bin`).pipe(rename(defaults.ebootFileNames.original));
   }
 
-  projectFiles() {
+  projectFiles(config: IVitaProjectConfiguration) {
     this.logger("Assembling project files...");
     return merge(
-      this.generatedSfoFile(),
-      this.ebootFile(),
-      this.sourceFiles(),
-      this.processedFiles()
+      this.generatedSfoFile(config),
+      this.ebootFile(config),
+      this.sourceFiles(config),
+      this.processedFiles(config)
     );
   }
 
-  build() {
+  build(config: IVitaProjectConfiguration) {
     this.compileSourceFiles();
-    return this.projectFiles()
-      .pipe(zip(`${this.configuration.title}.vpk`))
+    return this.projectFiles(config)
+      .pipe(zip(`${config.title}.vpk`))
       .pipe(
-        gulp.dest(this.configuration.outDir ?? defaults.config.outDir ?? "dist")
+        gulp.dest(config.outDir ?? defaults.config.outDir ?? "dist")
       );
   }
 
-  async deployAsync() {
+  async deployAsync(config: IVitaProjectConfiguration) {
+    this.validateIp(config.ip);
+
     this.compileSourceFiles();
-    let tempDir =
-      this.configuration.tempDir ?? defaults.config.tempDir ?? ".temp";
+    let tempDir = config.tempDir;
     this.logger("Bundling project files to temp directory.");
-    await toPromise(this.projectFiles().pipe(gulp.dest(tempDir)));
+    await toPromise(this.projectFiles(config).pipe(gulp.dest(tempDir)));
     this.logger("Files bundled.");
     this.logger("Closing applications just in case.");
-    await this.sendCmdAsync("destroy");
+    await this.sendCmdAsync(config, "destroy");
     let ftp = new Client();
     this.logger("Connecting to FTP server...");
     await ftp.access({
-      host: this.configuration.ip ?? "localhost",
-      port: this.configuration.ports?.ftp ?? defaults.config.ports?.ftp ?? 1337,
+      host: config.ip ?? "localhost",
+      port: config.ports?.ftp ?? defaults.config.ports?.ftp ?? defaults.config.ports.ftp,
     });
     this.logger("Connected to FTP server.");
     this.logger("Listing directories");
@@ -299,8 +320,8 @@ class VitaProject {
     await ftp.cd("ux0:");
     this.logger("Going to app directory");
     await ftp.cd("app");
-    this.logger(`Going to ${this.configuration.id} directory`);
-    await ftp.cd(this.configuration.id ?? defaults.config.id ?? "HELLOWRLD");
+    this.logger(`Going to ${config.id} directory`);
+    await ftp.cd(config.id);
     this.logger("Uploading files...");
     await ftp.uploadFromDir(tempDir);
     this.logger("Files uploaded.");
@@ -308,35 +329,35 @@ class VitaProject {
     ftp.close();
     this.logger("Connection closed");
     this.logger("Clearing temp directory");
-    await this.clearTempDirectoryAsync();
+    await this.clearTempDirectoryAsync(config);
     this.logger("Cleared temp directory.");
   }
 }
 
 gulp.task("default", async () => {
   let project = new VitaProject();
-  project.build();
+  project.build(project.configuration);
 });
 gulp.task("build", async () => {
   let project = new VitaProject();
-  project.build();
+  project.build(project.configuration);
 });
 
 gulp.task("test:cmd", async () => {
   let project = new VitaProject();
   project.logger("Launching application...");
-  await project.sendCmdAsync(`launch ${project.configuration.id}`);
+  await project.sendCmdAsync(project.configuration, `launch ${project.configuration.id}`);
   project.logger("Application launched.");
   project.logger("Waiting two seconds.");
   await sleepAsync(2000);
   project.logger("Destroying applications...");
-  await project.sendCmdAsync("destroy");
+  await project.sendCmdAsync(project.configuration, "destroy");
   project.logger("Applications destroyed.");
 });
 
 gulp.task("deploy", async () => {
   let project = new VitaProject();
-  await project.deployAsync();
+  await project.deployAsync(project.configuration);
 });
 
 gulp.task("watch", async () => {
