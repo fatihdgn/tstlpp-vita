@@ -116,3 +116,4 @@ dist
 
 out-src
 package-lock.json
+system/eboot_*.bin
