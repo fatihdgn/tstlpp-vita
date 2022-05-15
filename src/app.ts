@@ -6,12 +6,11 @@ export default class App {
             Screen.clear(); 
             Graphics.debugPrint(5, 5, "Hello world - Press TRIANGLE to close.", white);
             Graphics.termBlend();
-            Screen.flip();
-            Screen.flip();
             // Check for input
             let pad = Controls.read();
             if (Controls.check(pad, Ctrl.SCE_CTRL_TRIANGLE))
                 break
+            Screen.flip()
         }
     }
 }
