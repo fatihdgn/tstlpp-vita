@@ -8,7 +8,8 @@
     "noImplicitThis": true,
     "strict": true,
     "rootDir": "src",
-    "outDir": "out-src"
+    "outDir": "out-src",
+    "esModuleInterop": true
   },
   "tstl": {
     "luaTarget": "5.2",
