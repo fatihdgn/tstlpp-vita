@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/TypeScriptToLua/vscode-typescript-to-lua/master/tsconfig-schema.json",
   "compilerOptions": {
     "target": "esnext",
     "moduleResolution": "node",
@@ -15,7 +16,7 @@
     "luaTarget": "5.2",
     "noHeader": true,
     "luaBundleEntry": "src/index.ts",
-    "luaBundle": "out-src/index.lua"
+    "luaBundle": "index.lua"
   },
   "exclude": ["node_modules", "gulpfile.ts"]
 }

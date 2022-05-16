@@ -1,11 +1,10 @@
 import os from "os";
-import gulp from "gulp";
 import fs from "fs";
 import del from "del";
 import { execSync } from "child_process";
 import zip from "gulp-zip";
 import merge from "merge-stream";
-import { src } from "gulp";
+import { src, dest, task } from "gulp";
 import rename from "gulp-rename";
 import filter from "gulp-filter";
 import { Client } from "basic-ftp";
@@ -96,12 +95,14 @@ function readConfiguration(filePath: string): IVitaProjectConfiguration {
 }
 
 function ensureEbootFileExists(config: IVitaProjectConfiguration) {
+  logger(`Ensuring the ${config.type} eboot file exists.`);
   if (
     !fs.existsSync(
       `${config.systemDir}/eboot_${config.type}.bin`
     )
   )
     throw errors.ebootFileIsMissing;
+  logger("Eboot file is ensured.");
 }
 
 function validateConfiguration(config: IVitaProjectConfiguration, ensureEbootFile: boolean = true) {
@@ -236,7 +237,7 @@ function generateSfoFile(config: IVitaProjectConfiguration, path: string) {
 function generatedSfoFile(config: IVitaProjectConfiguration) {
   let sfoFilePath = `${os.tmpdir()}/param.sfo`;
   generateSfoFile(config, sfoFilePath);
-  return gulp.src(sfoFilePath).pipe(rename("sce_sys/param.sfo"));
+  return src(sfoFilePath).pipe(rename("sce_sys/param.sfo"));
 }
 
 function sourceFiles(config: IVitaProjectConfiguration) {
@@ -289,9 +290,7 @@ function build(config: IVitaProjectConfiguration) {
   compileSourceFiles();
   return projectFiles(config)
     .pipe(zip(`${config.title}.vpk`))
-    .pipe(
-      gulp.dest(config.outDir ?? defaults.config.outDir ?? "dist")
-    );
+    .pipe(dest(config.outDir));
 }
 
 async function deployAsync(config: IVitaProjectConfiguration) {
@@ -300,7 +299,7 @@ async function deployAsync(config: IVitaProjectConfiguration) {
   compileSourceFiles();
   let tempDir = config.tempDir;
   logger("Bundling project files to temp directory.");
-  await toPromise(projectFiles(config).pipe(gulp.dest(tempDir)));
+  await toPromise(projectFiles(config).pipe(dest(tempDir)));
   logger("Files bundled.");
   logger("Closing applications just in case.");
   await sendCmdAsync(config, "destroy");
@@ -331,16 +330,17 @@ async function deployAsync(config: IVitaProjectConfiguration) {
 }
 
 
-gulp.task("default", async () => {
-  init();
-  build(config);
-});
-gulp.task("build", async () => {
+task("default", async () => {
   init();
   build(config);
 });
 
-gulp.task("test:cmd", async () => {
+task("build", async () => {
+  init();
+  build(config);
+});
+
+task("test:cmd", async () => {
   init();
   logger("Launching application...");
   await sendCmdAsync(config, `launch ${config.id}`);
@@ -352,12 +352,12 @@ gulp.task("test:cmd", async () => {
   logger("Applications destroyed.");
 });
 
-gulp.task("deploy", async () => {
+task("deploy", async () => {
   init();
   await deployAsync(config);
 });
 
-gulp.task("watch", async () => {
+task("watch", async () => {
   /* TODO: Implement watch logic.
     Connect to device.
     Send the open application command. 
