@@ -1,7 +1,8 @@
 {
-  "$schema": "./vita-project.schema.json",
+  "$schema": "https://raw.githubusercontent.com/fatihdgn/tstlpp-vita/upgrade/vita-companion-integration/vita-project.schema.json",
   "id": "HELLOWRLD",
   "title": "Hello World",
+  "type": "unsafe",
   "ip": "192.168.1.40",
   "ports": {
     "ftp": 1337,

@@ -8,11 +8,13 @@
     "title": {
       "type": "string"
     },
-    "unsafe": {
-      "type": "boolean"
+    "type":{
+      "type":"string",
+      "pattern": "(unsafe_sys|unsafe|safe)"
     },
     "ip": {
-      "type": "string"
+      "type": "string",
+      "pattern":"^((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)(\\.(?!$)|$)){4}$"
     },
     "ports": {
       "type": "object",
@@ -23,11 +25,7 @@
         "cmd": {
           "type": "integer"
         }
-      },
-      "required": [
-        "ftp",
-        "cmd"
-      ]
+      }
     },
     "systemDir": {
       "type": "string"
@@ -52,14 +50,6 @@
   },
   "required": [
     "id",
-    "title",
-    "unsafe",
-    "ip",
-    "ports",
-    "systemDir",
-    "sourceDir",
-    "tempDir",
-    "outDir",
-    "files"
+    "title"
   ]
 }
