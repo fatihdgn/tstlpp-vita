@@ -4,10 +4,10 @@ import del from "del";
 import { execSync } from "child_process";
 import zip from "gulp-zip";
 import merge from "merge-stream";
-import { src, dest, task } from "gulp";
+import { src, dest, task, watch, series } from "gulp";
 import rename from "gulp-rename";
 import filter from "gulp-filter";
-import { Client } from "basic-ftp";
+import { AccessOptions, Client } from "basic-ftp";
 const pngquant = require("gulp-pngquant");
 const NetcatClient = require("netcat/client");
 
@@ -65,7 +65,6 @@ const errors = {
 async function sleepAsync(ms: number) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
 }
-
 function toPromise(stream: NodeJS.ReadWriteStream) {
   return new Promise((resolve, reject) => {
     stream.on("error", reject).on("end", resolve);
@@ -73,27 +72,23 @@ function toPromise(stream: NodeJS.ReadWriteStream) {
 }
 
 let config: IVitaProjectConfiguration;
-const logger: (message: any) => void = console.log;
+let logger: (message: any) => void = console.log;
 
 function init(configurationFilePath?: string) {
+  if (!!configurationFilePath) configurationFilePath = defaults.projectConfigurationFilePath;
   ensureVitaMksfoexExists();
   config = readConfiguration(
     configurationFilePath ?? defaults.projectConfigurationFilePath
   );
   validateConfiguration(config);
 }
-
 function readConfiguration(filePath: string): IVitaProjectConfiguration {
   logger("Reading configuration...");
   if (!fs.existsSync(filePath)) throw errors.projectConfigFileIsMissing;
-  let vitaProjectConfig = Object.assign(
-    defaults.config,
-    JSON.parse(fs.readFileSync(filePath, "utf-8"))
-  );
+  let vitaProjectConfig = Object.assign({}, defaults.config, JSON.parse(fs.readFileSync(filePath, "utf-8")));
   logger("Configuration readed successfully.");
   return vitaProjectConfig;
 }
-
 function ensureEbootFileExists(config: IVitaProjectConfiguration) {
   logger(`Ensuring the ${config.type} eboot file exists.`);
   if (
@@ -104,7 +99,6 @@ function ensureEbootFileExists(config: IVitaProjectConfiguration) {
     throw errors.ebootFileIsMissing;
   logger("Eboot file is ensured.");
 }
-
 function validateConfiguration(config: IVitaProjectConfiguration, ensureEbootFile: boolean = true) {
   logger("Validating configuration...");
   validateId(config.id);
@@ -117,23 +111,17 @@ function validateId(id: string) {
   if (id.length !== consts.idLength)
     throw errors.idDoesNotConformRequirements;
 }
-
 function validateTitle(title: string) {
   if (title.length === 0)
     throw errors.titleIsNotAvailable;
 }
-
 function validateType(type: string) {
   if (type !== 'safe' && type !== 'unsafe' && type !== 'unsafe_sys')
     throw errors.typeIsNotValid
 }
-
-function validateIp(ip ?: string) {
-  if (!!ip)
-    throw errors.ipIsNotDefined;
+function validateIp(ip?: string) {
+  if (!ip) throw errors.ipIsNotDefined;
 }
-
-
 function ensureVitaMksfoexExists() {
   const tempSfoPath = `${os.tmpdir()}/temp.sfo`
   try { execSync(`vita-mksfoex -s TITLE_ID=HELLOWRLD "HELLO" ${tempSfoPath}`); }
@@ -142,57 +130,75 @@ function ensureVitaMksfoexExists() {
 }
 
 function generateNetcatClient(config: IVitaProjectConfiguration): typeof NetcatClient {
-  if (config.ip == null) throw errors.ipIsNotDefined;
+  validateIp(config.ip);
   return new NetcatClient()
     .addr(config.ip)
     .port(config.ports?.cmd ?? defaults.config.ports?.cmd ?? 1338)
     .retry(5000);
 }
 
-function sendCmdAsync(config: IVitaProjectConfiguration, cmd: string) {
+function sendCommandViaNetcatAsync(client: typeof NetcatClient, command: string) {
   return new Promise<void>((resolve, reject) => {
-    let nc: typeof NetcatClient;
-    try {
-      nc = generateNetcatClient(config);
-    } catch (error) {
-      reject(error);
-    }
-    nc.on("error", reject)
+    client
+      .on("error", reject)
       .connect()
-      .send(cmd + "\n", () => {
-        nc.close(() => {
+      .send(command + "\n", () => {
+        client.close(() => {
           resolve();
         });
       });
-  });
+  })
 }
 
-async function connectAndSendFileFromFtpAsync(config: IVitaProjectConfiguration) {
-  if (config.ip == null) throw errors.ipIsNotDefined;
-  if (config.id.length !== consts.idLength)
-    throw errors.idDoesNotConformRequirements;
-  let ftp = new Client();
-  logger("Connecting to FTP server...");
-  await ftp.access({
-    host: config.ip,
-    port: config.ports?.ftp ?? defaults.config.ports?.ftp ?? 1337,
-  });
-  logger("Connected to FTP server.");
-  logger("Listing directories");
-  logger(await ftp.list());
-  logger("Going to ux0: directory");
-  await ftp.cd("ux0:");
-  logger("Going to app directory");
-  await ftp.cd("app");
-  logger(`Going to ${config.id} directory`);
-  await ftp.cd(config.id);
-  logger("Uploading file...");
+function createCommander(config: IVitaProjectConfiguration) {
+  let createClient = () => generateNetcatClient(config);
+  return {
+    createClient,
+    launchAsync: async () => {
+      await sendCommandViaNetcatAsync(createClient(), `launch ${config.id}`);
+    },
+    destroyAsync: async () => {
+      await sendCommandViaNetcatAsync(createClient(), "destroy");
+    },
+    rebootAsync: async () => {
+      await sendCommandViaNetcatAsync(createClient(), "reboot");
+    },
+    screenAsync: async (state: "on" | "off") => {
+      await sendCommandViaNetcatAsync(createClient(), `screen ${state}`);
+    }
+  }
+}
 
-  await ftp.uploadFrom("./assets/100x100.png", "100x100.png");
-  logger("File uploaded.");
-  logger("Closing connection.");
-  ftp.close();
-  logger("Connection closed");
+function createFtpAccessOptionsFromConfig(config: IVitaProjectConfiguration): AccessOptions {
+  validateIp(config.ip);
+  return {
+    host: config.ip,
+    port: config.ports?.ftp ?? defaults.config.ports?.ftp,
+  }
+}
+
+async function connectToAppDirectoryViaFtp(config: IVitaProjectConfiguration) {
+  validateIp(config.ip);
+  validateId(config.id)
+  let client = new Client();
+  logger("Connecting to FTP server...");
+  await client.access(createFtpAccessOptionsFromConfig(config));
+  logger("Connected to FTP server.");
+  logger("Going into ux0: directory");
+  await client.cd("ux0:");
+  logger("Going into app directory");
+  await client.cd("app");
+  logger(`Going to ${config.id} directory`);
+  await client.cd(config.id);
+  return {
+    config,
+    client,
+    disconnect: function () {
+      logger("Closing connection.");
+      client.close();
+      logger("Connection closed");
+    }
+  };
 }
 
 async function clearTempDirectoryAsync(config: IVitaProjectConfiguration) {
@@ -203,8 +209,8 @@ async function clearTempDirectoryAsync(config: IVitaProjectConfiguration) {
   } else throw "FATAL ERROR: Temp directory is not defined...";
 }
 
-async function clearDirectoryAsync(dir: string): Promise < boolean > {
-  if(!!dir) {
+async function clearDirectoryAsync(dir: string): Promise<boolean> {
+  if (!!dir) {
     await del(`${dir}/**/*`);
     return true;
   }
@@ -241,6 +247,7 @@ function generatedSfoFile(config: IVitaProjectConfiguration) {
 }
 
 function sourceFiles(config: IVitaProjectConfiguration) {
+  compileSourceFiles();
   logger("Bundling source files...");
   return src(
     `${config.sourceDir}/**/*`
@@ -287,48 +294,49 @@ function projectFiles(config: IVitaProjectConfiguration) {
 }
 
 function build(config: IVitaProjectConfiguration) {
-  compileSourceFiles();
   return projectFiles(config)
     .pipe(zip(`${config.title}.vpk`))
     .pipe(dest(config.outDir));
 }
 
-async function deployAsync(config: IVitaProjectConfiguration) {
+async function uploadTempDirAsync(config: IVitaProjectConfiguration, clearAfterUpload: boolean = true, launchAppAfterUpload: boolean = false) {
+  validateId(config.id);
   validateIp(config.ip);
 
-  compileSourceFiles();
+  logger("Closing applications");
+  var commander = createCommander(config);
+  await commander.destroyAsync();
+  logger("Applications closed");
+
+  var connection = await connectToAppDirectoryViaFtp(config);
+  logger("Uploading files...");
+  let tempDir = config.tempDir;
+  await connection.client.uploadFromDir(tempDir);
+  logger("Files uploaded.");
+  connection.disconnect();
+  if (launchAppAfterUpload) {
+    logger("Opening application.");
+    await commander.launchAsync();
+    logger("Application opened.");
+  }
+  if (clearAfterUpload) {
+    logger("Clearing temp directory");
+    await clearTempDirectoryAsync(config);
+    logger("Cleared temp directory.");
+  }
+}
+
+async function deployAsync(config: IVitaProjectConfiguration) {
+  validateId(config.id);
+  validateIp(config.ip);
+
   let tempDir = config.tempDir;
   logger("Bundling project files to temp directory.");
   await toPromise(projectFiles(config).pipe(dest(tempDir)));
   logger("Files bundled.");
-  logger("Closing applications just in case.");
-  await sendCmdAsync(config, "destroy");
-  let ftp = new Client();
-  logger("Connecting to FTP server...");
-  await ftp.access({
-    host: config.ip ?? "localhost",
-    port: config.ports?.ftp ?? defaults.config.ports?.ftp ?? defaults.config.ports.ftp,
-  });
-  logger("Connected to FTP server.");
-  logger("Listing directories");
-  logger(await ftp.list());
-  logger("Going to ux0: directory");
-  await ftp.cd("ux0:");
-  logger("Going to app directory");
-  await ftp.cd("app");
-  logger(`Going to ${config.id} directory`);
-  await ftp.cd(config.id);
-  logger("Uploading files...");
-  await ftp.uploadFromDir(tempDir);
-  logger("Files uploaded.");
-  logger("Closing connection.");
-  ftp.close();
-  logger("Connection closed");
-  logger("Clearing temp directory");
-  await clearTempDirectoryAsync(config);
-  logger("Cleared temp directory.");
-}
 
+  await uploadTempDirAsync(config, true, true);
+}
 
 task("default", async () => {
   init();
@@ -340,24 +348,14 @@ task("build", async () => {
   build(config);
 });
 
-task("test:cmd", async () => {
-  init();
-  logger("Launching application...");
-  await sendCmdAsync(config, `launch ${config.id}`);
-  logger("Application launched.");
-  logger("Waiting two seconds.");
-  await sleepAsync(2000);
-  logger("Destroying applications...");
-  await sendCmdAsync(config, "destroy");
-  logger("Applications destroyed.");
-});
-
 task("deploy", async () => {
   init();
   await deployAsync(config);
 });
 
 task("watch", async () => {
+  init();
+  watch(["src/**/*", ...config.files], series(['deploy'])); // Redeploy works fine, and it's not that slow, for now...
   /* TODO: Implement watch logic.
     Connect to device.
     Send the open application command. 

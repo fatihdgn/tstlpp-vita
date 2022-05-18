@@ -3,12 +3,13 @@ import { run, signalExit } from './run';
 run({
   init: () => { 
     return {
-      text: "Hello world - Press TRIANGLE to close.",
+      text: "Hello world - Press ENTER to close.",
       textPosition: {
         x: 5,
         y: 5
       },
-      textColor: Color.new(255, 255, 255)
+      textColor: Color.new(255, 255, 255),
+      enterCtrl: Controls.getEnterButton()
     } 
   },
   draw: (state) => {
@@ -16,7 +17,7 @@ run({
   },
   check: (state) => {
     let pad = Controls.read();
-    if (Controls.check(pad, Ctrl.SCE_CTRL_TRIANGLE))
+    if (Controls.check(pad, state.enterCtrl))
       signalExit();
   }
 });
