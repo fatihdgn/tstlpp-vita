@@ -11,6 +11,14 @@ import { AccessOptions, Client } from "basic-ftp";
 const pngquant = require("gulp-pngquant");
 const NetcatClient = require("netcat/client");
 
+const defaultRootDir = "src";
+const tsConfigFileName = "tsconfig.json";
+let rootDir: string;
+if (fs.existsSync(tsConfigFileName)) {
+  var tsConfig = JSON.parse(fs.readFileSync(tsConfigFileName, "utf-8"));
+  rootDir = tsConfig?.compilerOptions?.rootDir?.toString() ?? defaultRootDir;
+}
+
 interface IVitaProjectConfiguration {
   id: string;
   title: string;
@@ -355,7 +363,8 @@ task("deploy", async () => {
 
 task("watch", async () => {
   init();
-  watch(["src/**/*", ...config.files], series(['deploy'])); // Redeploy works fine, and it's not that slow, for now...
+  await deployAsync(config);
+  watch([`${rootDir}/**/*`, ...config.files], series(['deploy'])); // Redeploy works fine, and it's not that slow, for now...
   /* TODO: Implement watch logic.
     Connect to device.
     Send the open application command. 
