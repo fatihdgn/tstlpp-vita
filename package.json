@@ -5,6 +5,7 @@
   "description": "",
   "scripts": {
     "build": "tstl & gulp",
+    "watch": "gulp watch",
     "dev": "tstl --watch"
   },
   "keywords": [],
